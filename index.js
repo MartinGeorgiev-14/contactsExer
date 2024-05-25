@@ -4,10 +4,14 @@ const cors = require("cors")
 const morgan = require("morgan")
 
 morgan.token("body", (req, res) => JSON.stringify(req.body))
+require("dotenv").config()
 
+const mongoose = require("mongoose")
 const express = require("express")
 const {error} = require("console")
 const app = express()
+const Contact = require("./contact")
+
 app.use(express.json())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 app.use(cors())
@@ -36,71 +40,94 @@ let contacts = [
     }
 ]
 
-app.get("/api/persons", (request, response) => response.json(contacts))
-
-app.get("/info", (request, response) => {
-    const lenght = contacts.length
-    const date = new Date()
-
-    return response.send(
-        `<p>Phonebook has info for ${lenght} people</p>
-        <br/>
-        <p>${date}</p>`)
+app.get("/api/persons", (request, response) => {
+    Contact.find({}).then(contact => {
+        response.json(contact)
+    })
 })
 
-app.get("/api/persons/:id", (request, response) => {
-    const id = Number(request.params.id)
+app.get("/api/info", (request, response) => {
 
-    contact = contacts.find(c => c.id === id)
-
-    if(!contact){
-        return response.status(404).end()
-    }
-
-    return response.json(contact)
+    Contact.find({}).then(contact => {
+        response.send(
+            `<p>Phonebook has info for ${contact.length} people</p>
+            <br/>
+            <p>${new Date()}</p>`)
+    })
+ 
 })
 
-app.delete("/api/persons/:id", (request, response) => {
-    const id = Number(request.params.id)
+app.get("/api/persons/:id", (request, response, next) => {
+    Contact.findById(request.params.id).then(contact => {
+        response.json(contact)
+    }).catch(error => next(error)) 
+})
 
-    if(!contacts.find(c => c.id === id)){
-        return response.status(404).json({error: "Contant was not found"})
-    }
-
-    contacts = contacts.filter(c => c.id !== id)
+app.delete("/api/persons/:id", (request, response, next) => {
+    Contact.findByIdAndDelete(request.params.id).then(contact => {
+        console.log(`Deleted ${contact.name} number ${contact.number} from the phonebook`)
+        response.status(204).end()
+    }).catch(error => next(error)) 
     
-    return response.status(204).end()
 })
 
-app.post("/api/persons", (request, response) => {
-    
+app.post("/api/persons", (request, response, next) => {
     const body = request.body
-    const id = Math.round(Math.random() * (10000 - 1) + 1)
-    const name = contacts.filter(c => c.name === body.name)
-    console.log(name.length)
-    if(!body.name || !body.number){
-        return response.status(400).json({
-            error: "content missing"
-        })
-    }
-    else if(name.length === 1){
-        return response.status(409).json({
-            error: "contact already exists"
-        })
-    }
-
-    const contact = {
+    console.log(request.body)
+    if(body.content){
+        response.status(400).json({"error": "Missing content"})
+    } 
+    
+    const contact = new Contact({   
         name: body.name,
-        number: body.number,
-        id: id
-    }
+        number: body.number
+    })
 
-    contacts = contacts.concat(contact)
+    contact.save().then(result => {
+        console.log(`Added new contact to the DB: Name: ${contact.name} Number: ${contact.number}`)
+        response.status(200).json(result)
+    }).catch(error => next(error))  
 
-    return response.json(contact)
 })
 
-const PORT = process.env.PORT || 3000
+app.put("/api/persons/:id", (request, response, next) => {
+    const {name, number} = request.body
+
+    const body = request.body
+
+    const note = {
+        name: body.name,
+        number: body.number
+    }
+
+    Contact.findByIdAndUpdate(request.params.id, {name, number},
+        {new: true, runValidators: true, context: "query"})
+    .then(updateContact => {
+        response.json(updateContact)
+    })
+    .catch(error => next(error))
+})
+
+const PORT = process.env.PORT 
 app.listen(PORT, () => {
     console.log(`Server is running on ${PORT}`)
 })
+
+
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({error: "unknown endpoint"})
+}
+
+app.use(unknownEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+
+    if (error.name === "CastError"){
+        return response.status(400).json({error: "bad id request"})
+    }else if (error.name === "ValidationError"){
+        return response.status(400).json({error: error.message})
+    }
+}
+
+app.use(errorHandler)
