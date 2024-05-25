@@ -1,14 +1,14 @@
-const http = require("http")
-const {json} = require("stream/consumers")
+require("http")
+require("stream/consumers")
 const cors = require("cors")
 const morgan = require("morgan")
 
-morgan.token("body", (req, res) => JSON.stringify(req.body))
+morgan.token("body", (req) => JSON.stringify(req.body))
 require("dotenv").config()
 
-const mongoose = require("mongoose")
+require("mongoose")
 const express = require("express")
-const {error} = require("console")
+require("console")
 const app = express()
 const Contact = require("./contact")
 
@@ -17,28 +17,6 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms :b
 app.use(cors())
 app.use(express.static("dist"))
 
-let contacts = [
-    { 
-      "id": 1,
-      "name": "Arto Hellas", 
-      "number": "040-123456"
-    },
-    { 
-      "id": 2,
-      "name": "Ada Lovelace", 
-      "number": "39-44-5323523"
-    },
-    { 
-      "id": 3,
-      "name": "Dan Abramov", 
-      "number": "12-43-234345"
-    },
-    { 
-      "id": 4,
-      "name": "Mary Poppendieck", 
-      "number": "39-23-6423122"
-    }
-]
 
 app.get("/api/persons", (request, response) => {
     Contact.find({}).then(contact => {
@@ -93,13 +71,6 @@ app.post("/api/persons", (request, response, next) => {
 app.put("/api/persons/:id", (request, response, next) => {
     const {name, number} = request.body
 
-    const body = request.body
-
-    const note = {
-        name: body.name,
-        number: body.number
-    }
-
     Contact.findByIdAndUpdate(request.params.id, {name, number},
         {new: true, runValidators: true, context: "query"})
     .then(updateContact => {
@@ -120,7 +91,7 @@ const unknownEndpoint = (request, response) => {
 
 app.use(unknownEndpoint)
 
-const errorHandler = (error, request, response, next) => {
+const errorHandler = (error, request, response) => {
     console.error(error.message)
 
     if (error.name === "CastError"){
